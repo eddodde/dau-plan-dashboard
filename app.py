@@ -214,11 +214,49 @@ st.title("🎯 VIP DAU 개선 플랜 트래커")
 st.caption("진단(도달·이탈 대시보드)은 '왜'를 설명하고, 여기는 '무엇을 언제 했고 효과가 났는가'를 추적합니다.")
 
 # ════════════════════════════════════════════════════════════
-# ① 플랜 — 목표·레버
+# ① 플랜 — 배경·트랙 설명·목표 (처음 보는 사람 기준)
 # ════════════════════════════════════════════════════════════
-section("① 플랜 — 목표 시나리오와 레버 구조",
-        "목표는 'DAU 반등'이 아니라 '역신장 폭 축소' — 확정치는 파일럿 실측 후 보정", anchor="sec-plan")
+section("① 플랜 — 무엇을, 왜 하는가",
+        "처음 보는 분을 위한 요약 → 트랙 A·B 설명 → 목표 시나리오 → 주간 운영", anchor="sec-plan")
 
+insight([
+    "VIP DAU가 전년비 <b>−10% 역신장</b>. 반면 MAU(월 방문자 수)는 <b>+9.5% 성장</b> → 문제는 고객 수가 아니라 "
+    "<b>방문 빈도(스티키니스 26.7%→22.5%, 월평균 방문일수 8.1일→6.8일)</b>.",
+    "빈도의 자발적 회복은 어렵고(최대 혜택인 전관행사로도 회복 안 됨), 상품·시장 요인은 CRM 통제 밖 → "
+    "CRM이 통제 가능한 수단 = <b>발송(터치)이 실제 재방문으로 이어지게 만드는 것</b>.",
+    "그 병목이 2가지: ① <b>발송 시점</b> — 현재 하루 전(D-1) 행동 기준이라 고객 의사결정 시점과 어긋남 "
+    "② <b>도달</b> — VIP 수신동의자 3명 중 2명은 앱 미보유/삭제로 푸시가 닿지 않음. 아래 트랙 A·B가 각각을 공략.",
+], cap="📌 왜 이 플랜인가 — 배경 3줄")
+
+tc1, tc2 = st.columns(2)
+with tc1:
+    st.markdown("""<div class="lever soon"><div class="lt">트랙 A · 본명 레버 · 실시간 적재 완료 후 착수</div>
+    <div class="lh">행동 시점 정밀도 — D-1 발송을 실시간 트리거로</div>
+    <ul style="margin:6px 0 0;padding-left:18px">
+    <li><b>무엇</b>: 고객의 <b>당일</b> 행동(조회·검색·장바구니)을 감지해 몇 시간 내 관련 메시지 발송</li>
+    <li><b>왜</b>: 지금은 <b>어제(D-1) 행동</b> 기준 발송이라 시점이 어긋나 반응이 약함 — 앱푸시 경유 DAU가 −20%로 최대 하락 항목</li>
+    <li><b>어떻게</b>: 동질군 무작위 분할 A/B — <b>실시간 vs 기존 D-1</b>, 발송→익일 재방문율로 판정</li>
+    <li><b>일정</b>: W0 실시간 데이터 적재 요청 → 적재 완료 후 2~4주 파일럿</li>
+    <li><b>기대 효과</b>: 앱푸시 반응 회복 시 DAU 하락분의 <b>~45%까지 커버(상한)</b></li>
+    </ul></div>""", unsafe_allow_html=True)
+with tc2:
+    st.markdown("""<div class="lever now"><div class="lt">트랙 B · 즉시 착수 (W0) · 리드타임 없음</div>
+    <div class="lh">채널 도달 — 앱 미보유/삭제 VIP 재설치</div>
+    <ul style="margin:6px 0 0;padding-left:18px">
+    <li><b>무엇</b>: 푸시 수신동의는 했지만 <b>앱을 지웠거나 미보유</b>인 VIP(약 168,000명)에게 문자·이메일·카카오로 재설치 오퍼 발송</li>
+    <li><b>왜</b>: 닿지 않으면 어떤 메시지도 무효 — 재설치되면 푸시 도달 모수로 편입되어 트랙 A의 대상도 늘어남</li>
+    <li><b>어떻게</b>: 발송군 vs 대조군 — 재설치율 → 재설치 후 7일 재방문 → 인센티브 비용 대비 복귀 가치로 판정</li>
+    <li><b>일정</b>: 이번 주 오퍼 확정·발송 → 2~4주 측정 (트랙 A 대기 기간의 공백을 메우는 즉시 액션)</li>
+    <li><b>기대 효과</b>: 재설치 1% 가정 시 DAU 하락분의 <b>~10% 커버(상한)</b></li>
+    </ul></div>""", unsafe_allow_html=True)
+
+st.markdown("""<div class="lever keep" style="margin-top:10px"><div class="lt">상시 유지 (신규 액션 아님)</div>
+<b>기존 운영 레버</b> — 휴면 자동화·행동 트리거(D-1)·전관행사·발송량 관리는 이미 운영 중(중단 시 후퇴하므로 유지),
+수신거부율 가드레일 모니터링 병행. 이 레버들은 소진 상태라 추가 개선 여지는 위 트랙 A·B에 있음.</div>""",
+            unsafe_allow_html=True)
+
+st.markdown('<div style="font-weight:700;font-size:15px;margin:16px 0 4px">목표 — "반등"이 아니라 "역신장 폭 축소"</div>',
+            unsafe_allow_html=True)
 rows = "".join(
     f'<tr><td><b style="color:{c}">{n}</b></td><td class="l">{d}</td>'
     f'<td><b>{t:+.1f}%</b></td></tr>'
@@ -230,28 +268,12 @@ st.markdown(f"""
 <tr><td>현재</td><td class="l">착수 시점 (2026-06, B2B 제외)</td><td><b style="color:#C44E52">{CUR_YOY:+.1f}%</b></td></tr>
 </table>
 """, unsafe_allow_html=True)
-
-lc1, lc2, lc3 = st.columns(3)
-with lc1:
-    st.markdown("""<div class="lever now"><div class="lt">즉시 착수 (W0)</div>
-    <div class="lh">트랙 B — 채널 도달 (재설치)</div>
-    앱 미보유/삭제 VIP에 타 채널로 재설치 오퍼 발송(대조군 포함 A/B).
-    리드타임 없이 바로 성과가 찍히는 유일한 액션. 커버 상한 ~10%.</div>""", unsafe_allow_html=True)
-with lc2:
-    st.markdown("""<div class="lever soon"><div class="lt">단기 (적재 완료 후 2~4주)</div>
-    <div class="lh">트랙 A — 행동 시점 정밀도 (실시간)</div>
-    당일 행동 기반 실시간 트리거 vs 기존 D-1 발송 A/B.
-    W0에 실시간 적재 요청 접수 → 본명 레버. 커버 상한 ~45%.</div>""", unsafe_allow_html=True)
-with lc3:
-    st.markdown("""<div class="lever keep"><div class="lt">상시 유지</div>
-    <div class="lh">기존 운영 레버</div>
-    휴면 자동화·행동 트리거(D-1)·전관행사·발송량 관리는 운영 중(소진 레버지만 중단 시 후퇴).
-    수신거부율 가드레일 병행.</div>""", unsafe_allow_html=True)
+st.caption("DAU는 시장·상품 요인이 커 CRM 단독 반등은 과약속 — 커버 상한(A ~45% + B ~10%) 기반의 단계 목표이며, 파일럿 실측 후 보정.")
 
 insight([
-    "당장 실행 = <b>트랙 B(이번 주 발송 가능)</b>, 본명 레버 = <b>트랙 A(실시간 적재 후)</b> — 리드타임 공백을 B가 메움.",
-    "건강 지표는 총DAU 외에 <b>직접(자발) DAU·유료 의존도</b>를 병행 — 광고로 부풀린 방어와 구분.",
-], cap="📌 플랜 요지")
+    "<b>주 1회 갱신</b>: ① 사이드바에 최신 채널 DAU 파일 업로드(③ 실적 자동 갱신) ② '② 실행 현황' 과제 상태 업데이트 "
+    "③ 파일럿 결과 CSV 업로드(④·⑤ 자동 판정).",
+], cap="🗓 운영 리듬")
 
 # ════════════════════════════════════════════════════════════
 # ② 실행 현황
@@ -356,6 +378,39 @@ else:
                      ticktext=[f"{m}월" for m in months_x], title=None)
     plot(fig, f"{cur_year}년 월별 VIP DAU — 전년 실선·목표 점선(전년 동월 × 시나리오)")
     st.caption("집계 중 부분월 자동 제외 · 목표선 = 전년 동월 × (1 + 시나리오 전년비)")
+
+    # ── 주간 뷰: 주 1회 보고용 (월이 안 끝나도 매주 최신 실적 확인)
+    if up_chdau is not None:
+        wk = tot_d.groupby(pd.Grouper(freq="W-SUN")).mean()
+        wk = wk[wk.index <= cutoff]          # 진행 중인 주(일요일 미도래) 제외
+        prev_wk = wk.shift(52)               # 전년 동주(52주 전)
+        if len(wk) > 1:
+            last_wk = wk.index.max()
+            w_now = wk.iloc[-1]
+            w_base = prev_wk.iloc[-1] if pd.notna(prev_wk.iloc[-1]) else None
+            wyoy = (w_now / w_base - 1) * 100 if w_base else None
+            w4 = ((wk.tail(4).mean() / prev_wk.tail(4).mean() - 1) * 100
+                  if prev_wk.tail(4).notna().all() else None)
+            wc1, wc2, wc3 = st.columns(3)
+            with wc1: metric_card(f"최근 완료주 주평균 DAU (~{last_wk:%m/%d})", fnum(w_now), "월~일 평균")
+            with wc2:
+                metric_card("전년 동주비", f"{wyoy:+.1f}%" if wyoy is not None else "—",
+                            f"전년 동주 {fnum(w_base)}" if w_base else "전년 데이터 없음",
+                            color="#C44E52" if (wyoy or 0) < 0 else "#55A868")
+            with wc3:
+                metric_card("최근 4주 평균 전년비", f"{w4:+.1f}%" if w4 is not None else "—",
+                            "주간 노이즈 평활 — 추세 판단용",
+                            color="#C44E52" if (w4 or 0) < 0 else "#55A868")
+            rec, base = wk.tail(12), prev_wk.tail(12)
+            figw = go.Figure()
+            figw.add_bar(x=rec.index, y=rec.values, name="주평균 DAU", marker_color="#4C72B0")
+            figw.add_scatter(x=base.index, y=base.values, name="전년 동주", mode="lines+markers",
+                             line=dict(color="#9aa7b8", width=2))
+            figw.update_layout(height=280, margin=dict(t=10, b=10), hovermode="x unified",
+                               legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+                               yaxis=dict(title="주평균 DAU(명)"))
+            plot(figw, "주간 실적 — 최근 12주 vs 전년 동주")
+            st.caption("주=월~일, 완료된 주만 표시 · 전년 동주=52주 전 · 급증일 제외 반영")
 
 # ════════════════════════════════════════════════════════════
 # ④ 실적 — 트랙 B (재설치 캠페인)
