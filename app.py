@@ -214,6 +214,7 @@ with st.sidebar:
         ("계획", [("sec-now", "현황 요약"), ("sec-plan", "추진 배경·실행 계획")]),
         ("실행", [("sec-exec", "실행 현황 (주간 갱신)")]),
         ("실적", [("sec-kpi", "DAU 실적 — 월간·주간"),
+                  ("sec-attrib", "레버별 기여 분해"),
                   ("sec-trackb", "트랙 B — 재설치"),
                   ("sec-tracka", "트랙 A — 실시간 A/B")]),
         ("기준·양식", [("sec-judge", "판정 기준·업로드 양식")]),
@@ -265,6 +266,40 @@ if tot_d is not None:
     wk = tot_d.groupby(pd.Grouper(freq="W-SUN")).mean()
     wk = wk[wk.index <= cutoff]          # 진행 중인 주 제외
     prev_wk = wk.shift(52)               # 전년 동주(52주 전)
+
+# ── 파일럿 결과 사전 파싱 (기여 분해·트랙 섹션 공용 — 업로드 파일은 1회만 read) ──
+TB_COLS = ["date", "group", "targets", "reinstalls", "revisits_7d", "optouts", "cost"]
+TA_COLS = ["date", "group", "sent", "clicks", "revisits_d1"]
+REINSTALL_STICK = 0.11   # 재설치자 스티키니스 보수 가정(VIP 평균 22.5%의 절반) — 실측 후 대체
+
+tb_df = tb_send = tb_ctrl = None
+if up_tb is not None:
+    tb_df = pd.read_csv(up_tb)
+    if all(c in tb_df.columns for c in TB_COLS[:5]):
+        _g = tb_df.groupby("group")[["targets", "reinstalls", "revisits_7d"]].sum()
+        tb_send = _g.loc["발송"] if "발송" in _g.index else None
+        tb_ctrl = _g.loc["대조"] if "대조" in _g.index else None
+
+ta_df = ta_rt = ta_d1 = None
+if up_ta is not None:
+    ta_df = pd.read_csv(up_ta)
+    if all(c in ta_df.columns for c in TA_COLS[:3]):
+        _g = ta_df.groupby("group")[["sent", "clicks", "revisits_d1"] if "clicks" in ta_df.columns
+                                    else ["sent", "revisits_d1"]].sum()
+        ta_rt = _g.loc["실시간"] if "실시간" in _g.index else None
+        ta_d1 = _g.loc["D-1"] if "D-1" in _g.index else None
+
+# 레버별 DAU 기여 산출 (대조군/비교군 대비 '순증'만 기여로 인정)
+contrib_b = contrib_a = None
+if tb_send is not None and tb_send["targets"]:
+    _rr_c = (tb_ctrl["reinstalls"] / tb_ctrl["targets"]) if (tb_ctrl is not None and tb_ctrl["targets"]) else 0.0
+    _net_reinstall = tb_send["reinstalls"] - tb_send["targets"] * _rr_c   # 자연 재설치 차감
+    contrib_b = max(_net_reinstall, 0) * REINSTALL_STICK                  # 일평균 DAU 환산
+if ta_rt is not None and ta_d1 is not None and ta_rt["sent"] and ta_d1["sent"]:
+    _lift = ta_rt["revisits_d1"] / ta_rt["sent"] - ta_d1["revisits_d1"] / ta_d1["sent"]
+    _days = max(pd.to_datetime(ta_df["date"]).nunique(), 1)
+    _daily_sent = ta_df.loc[ta_df["group"] == "실시간", "sent"].sum() / _days
+    contrib_a = max(_lift, 0) * _daily_sent                               # 일평균 추가 재방문 = DAU 기여
 
 # ════════════════════════════════════════════════════════════
 # 현황 요약
@@ -458,25 +493,77 @@ else:
         st.caption("주 단위=월~일(완료된 주만 표시) · 전년 동주=52주 전 · 급증일 제외 반영")
 
 # ════════════════════════════════════════════════════════════
-# ④ 실적 — 트랙 B (재설치 캠페인)
+# ④ 레버별 기여 분해 — "이 액션으로 이만큼 견인"
 # ════════════════════════════════════════════════════════════
-section("④ 트랙 B 실적 — 미보유 재설치 캠페인",
+section("④ 레버별 기여 분해",
+        "전년 동월 대비 DAU 변동을 '시장·기타 / 트랙 A / 트랙 B'로 분해 — 기여는 대조군 대비 순증만 인정", anchor="sec-attrib")
+
+if not cur_kpi or cur_kpi.get("base") is None:
+    st.info("DAU 실적 파일 업로드 시 기여 분해가 표시됩니다.")
+else:
+    _cA = contrib_a or 0.0
+    _cB = contrib_b or 0.0
+    _gap = cur_kpi["dau"] - cur_kpi["base"]           # 전년 동월 대비 변동(음수=감소)
+    _resid = _gap - (_cA + _cB)                        # 액션 기여 제외한 시장·기타 변동
+    _loss = max(cur_kpi["base"] - cur_kpi["dau"], 0)   # 하락 절대량
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        metric_card("트랙 A 기여 (일평균 DAU)",
+                    f"+{fnum(_cA)}" if contrib_a is not None else "측정 전",
+                    "실시간 vs D-1 리프트 × 일평균 발송량" if contrib_a is not None
+                    else "파일럿 결과 업로드 시 자동 산출", color="#4C72B0")
+    with c2:
+        metric_card("트랙 B 기여 (일평균 DAU)",
+                    f"+{fnum(_cB)}" if contrib_b is not None else "측정 전",
+                    f"순증 재설치 × 스티키니스 {REINSTALL_STICK*100:.0f}%(보수 가정)" if contrib_b is not None
+                    else "파일럿 결과 업로드 시 자동 산출", color="#C44E52")
+    with c3:
+        if _loss and (contrib_a is not None or contrib_b is not None):
+            metric_card("하락분 상쇄율", f"{(_cA + _cB) / _loss * 100:.1f}%",
+                        f"전년 대비 감소 {fnum(_loss)} 중 액션 기여 {fnum(_cA + _cB)}",
+                        color="#55A868")
+        else:
+            metric_card("하락분 상쇄율", "측정 전", "트랙 A·B 결과 업로드 시 자동 산출")
+
+    figc = go.Figure(go.Waterfall(
+        orientation="v",
+        measure=["absolute", "relative", "relative", "relative", "total"],
+        x=[f"전년 동월<br>{(cur_kpi['dt'] - pd.DateOffset(years=1)):%Y-%m}", "시장·기타 변동",
+           "트랙 B 기여", "트랙 A 기여", f"현재<br>{cur_kpi['dt']:%Y-%m}"],
+        y=[cur_kpi["base"], _resid, _cB, _cA, 0],
+        text=[fnum(cur_kpi["base"]), f"{'△' if _resid < 0 else '+'}{fnum(abs(_resid))}",
+              f"+{fnum(_cB)}", f"+{fnum(_cA)}", fnum(cur_kpi["dau"])],
+        textposition="outside",
+        connector=dict(line=dict(color="#c9d0da")),
+        decreasing=dict(marker=dict(color="#C44E52")),
+        increasing=dict(marker=dict(color="#55A868")),
+        totals=dict(marker=dict(color="#4C72B0")),
+    ))
+    figc.update_layout(height=340, margin=dict(t=24, b=10), showlegend=False,
+                       yaxis=dict(title="VIP DAU(명)"))
+    plot(figc, "전년 동월 → 현재 DAU 변동 분해 (워터폴)")
+    st.caption("기여 산식 — 트랙 A: (실시간 재방문율 − D-1 재방문율) × 일평균 발송량 · "
+               "트랙 B: (발송군 재설치 − 자연 재설치) × 재설치자 스티키니스(보수 가정, 실측 후 대체) · "
+               "시장·기타 = 잔여분(액션과 무관한 변동). 파일럿 결과 미업로드 시 기여 0으로 표시.")
+
+# ════════════════════════════════════════════════════════════
+# ⑤ 실적 — 트랙 B (재설치 캠페인)
+# ════════════════════════════════════════════════════════════
+section("⑤ 트랙 B 실적 — 미보유 재설치 캠페인",
         "발송군 vs 대조군: 재설치율 → 재설치 후 재방문 → 비용 효율", anchor="sec-trackb")
 
-TB_COLS = ["date", "group", "targets", "reinstalls", "revisits_7d", "optouts", "cost"]
 if up_tb is None:
     st.info("트랙 B 결과 CSV 업로드 시 자동 집계됩니다. 컬럼: " + ", ".join(TB_COLS) +
             " (group=발송/대조, cost=인센티브 비용·원)")
 else:
-    tb = pd.read_csv(up_tb)
+    tb = tb_df
     missing = [c for c in TB_COLS[:5] if c not in tb.columns]
     if missing:
         st.error(f"필수 컬럼 누락: {missing}")
     else:
-        g = tb.groupby("group")[["targets", "reinstalls", "revisits_7d"]].sum()
         b1, b2, b3, b4 = st.columns(4)
-        send = g.loc["발송"] if "발송" in g.index else None
-        ctrl = g.loc["대조"] if "대조" in g.index else None
+        send, ctrl = tb_send, tb_ctrl
         if send is not None:
             rr = send["reinstalls"] / send["targets"] * 100 if send["targets"] else 0
             rv = send["revisits_7d"] / send["reinstalls"] * 100 if send["reinstalls"] else 0
@@ -511,24 +598,21 @@ else:
             plot(figb, "주간 재설치·재방문 추이 (발송군)")
 
 # ════════════════════════════════════════════════════════════
-# ⑤ 실적 — 트랙 A (실시간 트리거 A/B)
+# ⑥ 실적 — 트랙 A (실시간 트리거 A/B)
 # ════════════════════════════════════════════════════════════
-section("⑤ 트랙 A 실적 — 실시간 트리거 vs D-1",
+section("⑥ 트랙 A 실적 — 실시간 트리거 vs D-1",
         "동질군 무작위 분할: 발송→익일 재방문율 리프트가 1차 판정 지표", anchor="sec-tracka")
 
-TA_COLS = ["date", "group", "sent", "clicks", "revisits_d1"]
 if up_ta is None:
     st.info("트랙 A 결과 CSV 업로드 시 자동 집계됩니다. 컬럼: " + ", ".join(TA_COLS) +
             " (group=실시간/D-1)")
 else:
-    ta = pd.read_csv(up_ta)
+    ta = ta_df
     missing = [c for c in TA_COLS[:3] if c not in ta.columns]
     if missing:
         st.error(f"필수 컬럼 누락: {missing}")
     else:
-        g = ta.groupby("group")[["sent", "clicks", "revisits_d1"]].sum()
-        rt = g.loc["실시간"] if "실시간" in g.index else None
-        d1 = g.loc["D-1"] if "D-1" in g.index else None
+        rt, d1 = ta_rt, ta_d1
         a1, a2, a3, a4 = st.columns(4)
         if rt is not None and d1 is not None and rt["sent"] and d1["sent"]:
             res = ab_test(rt["revisits_d1"], rt["sent"], d1["revisits_d1"], d1["sent"])
@@ -555,9 +639,9 @@ else:
             st.caption(f"CTR — 실시간 {ctr_rt:.2f}% vs D-1 {ctr_d1:.2f}% (보조 지표)")
 
 # ════════════════════════════════════════════════════════════
-# ⑥ 판정 기준·업로드 양식
+# ⑦ 판정 기준·업로드 양식
 # ════════════════════════════════════════════════════════════
-section("⑥ 판정 기준 · 업로드 양식", anchor="sec-judge")
+section("⑦ 판정 기준 · 업로드 양식", anchor="sec-judge")
 
 st.markdown("""
 <table class="scen">
