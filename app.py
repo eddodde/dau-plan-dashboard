@@ -218,10 +218,13 @@ with st.sidebar:
                   ("sec-tracka", "트랙 A — 실시간 A/B")]),
         ("기준·양식", [("sec-judge", "판정 기준·업로드 양식")]),
     ]
-    for gname, links in NAV:
+    _nav = ""
+    for _gi, (gname, links) in enumerate(NAV):
+        _open = " open" if _gi == 0 else ""
         inner = "".join(f'<a class="navlink navsub" href="#{aid}">{label}</a>' for aid, label in links)
-        st.markdown(f'<details class="navacc" open><summary class="navgroup">{gname}</summary>{inner}</details>',
-                    unsafe_allow_html=True)
+        _nav += (f'<details class="navacc" name="navmenu"{_open}>'
+                 f'<summary class="navgroup">{gname}</summary>{inner}</details>')
+    st.markdown(_nav, unsafe_allow_html=True)
 
 st.title("🎯 VIP DAU 개선 실행 트래커")
 st.caption("원인 진단은 'VIP 도달·이탈 진단 대시보드' 참조 — 본 대시보드는 실행 과제의 진행 상태와 성과 추적을 목적으로 함")
