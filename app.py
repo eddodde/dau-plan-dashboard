@@ -8,7 +8,7 @@ import streamlit as st
 
 # ── 기본 설정 ──────────────────────────────────────────────
 st.set_page_config(
-    page_title="VIP DAU 개선 플랜 트래커",
+    page_title="VIP DAU 개선 실행 트래커",
     page_icon="🎯",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -22,7 +22,8 @@ SCENARIOS = [
     ("기본", -5.0, "트랙 A·B 부분 성공", "#4C72B0"),
     ("상한", -2.5, "앱푸시 반응 회복(커버 45%)", "#55A868"),
 ]
-CUR_YOY = -10.0   # 착수 시점 전년비 (26-06, B2B 제외)
+# 착수 시점 기준값 (2026-06, B2B 제외)
+BASE = {"month": "2026-06", "dau": 18282, "yoy": -10.0, "stick": 22.5}
 
 # ── 커스텀 CSS ─────────────────────────────────────────────
 st.markdown("""
@@ -47,6 +48,15 @@ st.markdown("""
         font-size: 14px; font-weight: 600; border: 1px solid #e3e9f2;
     }
     a.navlink:hover { background: #e3ecf8; color: #163E78; }
+    a.navlink.navsub { margin: 3px 0 3px 10px; font-size: 13px; padding: 6px 10px; }
+    details.navacc { margin: 4px 0; }
+    summary.navgroup { cursor: pointer; font-size: 12px; font-weight: 700; color: #55606f;
+        letter-spacing: .02em; padding: 7px 8px; border-radius: 6px; list-style: none;
+        user-select: none; background: #eef1f6; }
+    summary.navgroup::-webkit-details-marker { display: none; }
+    summary.navgroup:hover { background: #e3e9f2; color: #1a1a2e; }
+    summary.navgroup::before { content: "▸ "; color: #99a3b3; }
+    details[open] summary.navgroup::before { content: "▾ "; }
     .insight {
         background: #eef4fb; border-left: 4px solid #4C72B0; border-radius: 8px;
         padding: 12px 16px; margin: 6px 0 14px 0; font-size: 14px; line-height: 1.6;
@@ -57,7 +67,6 @@ st.markdown("""
     .insight ul { margin: 0; padding-left: 20px; }
     .insight li { margin: 5px 0; }
     .insight .cap { font-size: 12px; font-weight: 700; color: #666; display: block; margin-bottom: 6px; }
-    /* 레버 카드 3단 */
     .lever { background: #f8f9fa; border-radius: 10px; border-top: 4px solid #4C72B0;
         padding: 14px 16px; font-size: 13.5px; line-height: 1.65; height: 100%; }
     .lever .lh { font-weight: 700; font-size: 14.5px; color: #1a1a2e; margin-bottom: 6px; }
@@ -66,7 +75,6 @@ st.markdown("""
     .lever.now  { border-top-color: #C44E52; }
     .lever.soon { border-top-color: #4C72B0; }
     .lever.keep { border-top-color: #55A868; }
-    /* 시나리오 표 */
     table.scen { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 4px 0 10px; }
     table.scen th { background: #1f3864; color: #fff; padding: 8px 10px; font-weight: 600; }
     table.scen td { border: 1px solid #e3e9f2; padding: 8px 10px; text-align: center; }
@@ -96,7 +104,7 @@ def section(title, hint="", anchor=None):
         st.markdown(f'<div class="hint">{hint}</div>', unsafe_allow_html=True)
 
 
-def insight(bullets, kind="", cap="💡 시사점"):
+def insight(bullets, kind="", cap="요약"):
     if isinstance(bullets, str):
         bullets = [bullets]
     bullets = [b for b in bullets if b]
@@ -190,72 +198,152 @@ def load_actions():
 
 # ── 사이드바 ───────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("### 🎯 VIP DAU 개선 플랜 트래커")
-    st.caption("플랜 → 실행 → 실적. 매주 데이터만 갈아끼우면 됩니다.")
+    st.markdown("### 🎯 VIP DAU 개선 실행 트래커")
+    st.caption("실행 과제의 진행 상태와 성과를 주 1회 갱신하여 추적")
 
-    st.markdown("**📂 실적 데이터 업로드**")
-    up_chdau = st.file_uploader("① 채널별 일 DAU (.xlsx)", type=["xlsx", "xls"], key="up_ch",
-                                help="B2B 제외 기준 — DAU 실적 트래킹용")
-    up_mau = st.file_uploader("② 월별 VIP MAU/DAU (.xlsx)", type=["xlsx", "xls"], key="up_mau",
-                              help="간이 포맷(구분×월). ①이 없을 때 DAU 대체")
-    up_tb = st.file_uploader("③ 트랙 B 결과 (재설치 캠페인, .csv)", type=["csv"], key="up_tb")
-    up_ta = st.file_uploader("④ 트랙 A 결과 (실시간 트리거 A/B, .csv)", type=["csv"], key="up_ta")
+    with st.expander("📂 실적 데이터 업로드", expanded=False):
+        up_chdau = st.file_uploader("① 채널별 일 DAU (.xlsx)", type=["xlsx", "xls"], key="up_ch",
+                                    help="B2B 제외 기준 — DAU 실적 트래킹용(권장)")
+        up_mau = st.file_uploader("② 월별 VIP MAU/DAU (.xlsx)", type=["xlsx", "xls"], key="up_mau",
+                                  help="간이 포맷(구분×월). ① 미업로드 시 대체")
+        up_tb = st.file_uploader("③ 트랙 B 결과 (재설치, .csv)", type=["csv"], key="up_tb")
+        up_ta = st.file_uploader("④ 트랙 A 결과 (실시간 A/B, .csv)", type=["csv"], key="up_ta")
 
     st.markdown("**메뉴**")
-    for aid, label in [("sec-plan", "① 플랜 — 목표·레버"),
-                       ("sec-exec", "② 실행 현황"),
-                       ("sec-kpi", "③ 실적 — DAU 트래킹"),
-                       ("sec-trackb", "④ 실적 — 트랙 B(재설치)"),
-                       ("sec-tracka", "⑤ 실적 — 트랙 A(실시간)"),
-                       ("sec-judge", "⑥ 판정 기준·템플릿")]:
-        st.markdown(f'<a class="navlink" href="#{aid}">{label}</a>', unsafe_allow_html=True)
+    NAV = [
+        ("계획", [("sec-now", "현황 요약"), ("sec-plan", "추진 배경·실행 계획")]),
+        ("실행", [("sec-exec", "실행 현황 (주간 갱신)")]),
+        ("실적", [("sec-kpi", "DAU 실적 — 월간·주간"),
+                  ("sec-trackb", "트랙 B — 재설치"),
+                  ("sec-tracka", "트랙 A — 실시간 A/B")]),
+        ("기준·양식", [("sec-judge", "판정 기준·업로드 양식")]),
+    ]
+    for gname, links in NAV:
+        inner = "".join(f'<a class="navlink navsub" href="#{aid}">{label}</a>' for aid, label in links)
+        st.markdown(f'<details class="navacc" open><summary class="navgroup">{gname}</summary>{inner}</details>',
+                    unsafe_allow_html=True)
 
-st.title("🎯 VIP DAU 개선 플랜 트래커")
-st.caption("진단(도달·이탈 대시보드)은 '왜'를 설명하고, 여기는 '무엇을 언제 했고 효과가 났는가'를 추적합니다.")
+st.title("🎯 VIP DAU 개선 실행 트래커")
+st.caption("원인 진단은 'VIP 도달·이탈 진단 대시보드' 참조 — 본 대시보드는 실행 과제의 진행 상태와 성과 추적을 목적으로 함")
+
+# ── 데이터 사전 처리 (현황 요약·실적 섹션 공용) ─────────────
+dau_m, dau_src, tot_d, cutoff = None, "", None, None
+n_bad = 0
+if up_chdau is not None:
+    dc = load_dau_channel(up_chdau)
+    tot_d = dc[dc["channel"] == "TOTAL"].set_index("date")["value"].sort_index()
+    med_d = tot_d.rolling(91, center=True, min_periods=30).median()
+    bad = tot_d.index[(tot_d / med_d > 1.6).fillna(False)]
+    n_bad = len(bad)
+    tot_d = tot_d.drop(bad)
+    cutoff = tot_d.index.max()
+    dau_m = tot_d.groupby(pd.Grouper(freq="MS")).mean()
+    dau_m = drop_incomplete_months(dau_m, cutoff)
+    dau_src = f"채널 파일 DAU(B2B 제외{'·급증일 ' + str(n_bad) + '일 제외' if n_bad else ''})"
+elif up_mau is not None:
+    dm = load_dau_monthly_simple(up_mau)
+    s = dm[dm["metric"] == "DAU"].set_index("date")["value"].sort_index()
+    cutoff = pd.Timestamp.today().normalize()
+    dau_m = drop_incomplete_months(s, cutoff)
+    dau_src = "월별 파일 DAU(25.9~10 중복집계 오염 가능성 유의)"
+
+# 파생: 최근 완료월·전년비·주간
+cur_kpi = {}
+if dau_m is not None and len(dau_m) >= 13:
+    last_dt = dau_m.index.max()
+    last_v = dau_m.loc[last_dt]
+    base_dt = last_dt - pd.DateOffset(years=1)
+    base_v = dau_m.loc[base_dt] if base_dt in dau_m.index else None
+    cur_kpi = {"dt": last_dt, "dau": last_v,
+               "yoy": (last_v / base_v - 1) * 100 if base_v else None,
+               "base": base_v}
+wk, prev_wk = None, None
+if tot_d is not None:
+    wk = tot_d.groupby(pd.Grouper(freq="W-SUN")).mean()
+    wk = wk[wk.index <= cutoff]          # 진행 중인 주 제외
+    prev_wk = wk.shift(52)               # 전년 동주(52주 전)
 
 # ════════════════════════════════════════════════════════════
-# ① 플랜 — 배경·트랙 설명·목표 (처음 보는 사람 기준)
+# 현황 요약
 # ════════════════════════════════════════════════════════════
-section("① 플랜 — 무엇을, 왜 하는가",
-        "처음 보는 분을 위한 요약 → 트랙 A·B 설명 → 목표 시나리오 → 주간 운영", anchor="sec-plan")
+section("현황 요약", f"착수 시점 기준: {BASE['month']} DAU {fnum(BASE['dau'])} · 전년비 {BASE['yoy']:+.1f}% (B2B 제외)",
+        anchor="sec-now")
+
+if cur_kpi:
+    yoy = cur_kpi["yoy"]
+    h1, h2, h3, h4 = st.columns(4)
+    with h1:
+        metric_card(f"VIP DAU (최근 완료월 {cur_kpi['dt']:%Y-%m})", fnum(cur_kpi["dau"]), dau_src)
+    with h2:
+        imp = (yoy - BASE["yoy"]) if yoy is not None else None
+        metric_card("전년 동월비", f"{yoy:+.1f}%" if yoy is not None else "—",
+                    (f"착수 시점 {BASE['yoy']:+.1f}% 대비 {imp:+.1f}%p" if imp is not None else ""),
+                    color="#C44E52" if (yoy or 0) < 0 else "#55A868")
+    with h3:
+        w4 = None
+        if wk is not None and len(wk) >= 4 and prev_wk.tail(4).notna().all():
+            w4 = (wk.tail(4).mean() / prev_wk.tail(4).mean() - 1) * 100
+        metric_card("최근 4주 평균 전년비", f"{w4:+.1f}%" if w4 is not None else "—",
+                    "주간 변동 평활 — 추세 판단용",
+                    color="#C44E52" if (w4 or 0) < 0 else "#55A868")
+    with h4:
+        if yoy is not None:
+            met = [n for n, t, _, _ in SCENARIOS if yoy >= t]
+            pos = f"'{met[-1]}' 달성" if met else "전 시나리오 미달"
+            col = "#55A868" if met else "#C44E52"
+            metric_card("시나리오 위치", pos,
+                        " · ".join(f"{n} {t:+.0f}%" for n, t, _, _ in SCENARIOS), color=col)
+else:
+    st.info("사이드바의 '실적 데이터 업로드'에서 채널별 일 DAU 파일을 업로드하면 최신 현황이 표시됩니다. "
+            "미업로드 시 착수 시점 기준값만 표기합니다.")
+    h1, h2, h3 = st.columns(3)
+    with h1: metric_card(f"VIP DAU ({BASE['month']})", fnum(BASE["dau"]), "착수 시점 기준 · B2B 제외")
+    with h2: metric_card("전년 동월비", f"{BASE['yoy']:+.1f}%", "착수 시점 기준", color="#C44E52")
+    with h3: metric_card("스티키니스(DAU/MAU)", f"{BASE['stick']:.1f}%", "26.7% → 22.5% (전년 동월 대비)")
+
+# ════════════════════════════════════════════════════════════
+# ① 추진 배경·실행 계획
+# ════════════════════════════════════════════════════════════
+section("① 추진 배경 및 실행 계획",
+        "배경 → 실행 트랙(A·B) → 목표 시나리오 → 운영 방식", anchor="sec-plan")
 
 insight([
-    "VIP DAU가 전년비 <b>−10% 역신장</b>. 반면 MAU(월 방문자 수)는 <b>+9.5% 성장</b> → 문제는 고객 수가 아니라 "
-    "<b>방문 빈도(스티키니스 26.7%→22.5%, 월평균 방문일수 8.1일→6.8일)</b>.",
-    "빈도의 자발적 회복은 어렵고(최대 혜택인 전관행사로도 회복 안 됨), 상품·시장 요인은 CRM 통제 밖 → "
-    "CRM이 통제 가능한 수단 = <b>발송(터치)이 실제 재방문으로 이어지게 만드는 것</b>.",
-    "그 병목이 2가지: ① <b>발송 시점</b> — 현재 하루 전(D-1) 행동 기준이라 고객 의사결정 시점과 어긋남 "
-    "② <b>도달</b> — VIP 수신동의자 3명 중 2명은 앱 미보유/삭제로 푸시가 닿지 않음. 아래 트랙 A·B가 각각을 공략.",
-], cap="📌 왜 이 플랜인가 — 배경 3줄")
+    "VIP DAU 전년비 <b>−10% 역신장</b>. 반면 MAU(월 방문자 수)는 <b>+9.5% 증가</b> → 고객 수가 아닌 "
+    "<b>방문 빈도의 문제</b>(스티키니스 26.7%→22.5%, 월평균 방문일수 8.1일→6.8일).",
+    "빈도의 자발적 회복은 기대하기 어렵고(최대 혜택인 전관행사로도 미회복), 상품·시장 요인은 CRM 통제 범위 밖 → "
+    "CRM의 통제 가능 수단은 <b>발송(터치)의 재방문 전환력 제고</b>.",
+    "병목은 두 가지 — ① <b>발송 시점</b>: 현행 D-1(전일) 행동 기준 발송으로 고객 의사결정 시점과 불일치 "
+    "② <b>도달</b>: VIP 수신동의자의 약 2/3가 앱 미보유/삭제 상태로 푸시 미도달. 트랙 A·B가 각각에 대응.",
+], cap="추진 배경")
 
 tc1, tc2 = st.columns(2)
 with tc1:
-    st.markdown("""<div class="lever soon"><div class="lt">트랙 A · 본명 레버 · 실시간 적재 완료 후 착수</div>
-    <div class="lh">행동 시점 정밀도 — D-1 발송을 실시간 트리거로</div>
-    <ul style="margin:6px 0 0;padding-left:18px">
-    <li><b>무엇</b>: 고객의 <b>당일</b> 행동(조회·검색·장바구니)을 감지해 몇 시간 내 관련 메시지 발송</li>
-    <li><b>왜</b>: 지금은 <b>어제(D-1) 행동</b> 기준 발송이라 시점이 어긋나 반응이 약함 — 앱푸시 경유 DAU가 −20%로 최대 하락 항목</li>
-    <li><b>어떻게</b>: 동질군 무작위 분할 A/B — <b>실시간 vs 기존 D-1</b>, 발송→익일 재방문율로 판정</li>
-    <li><b>일정</b>: W0 실시간 데이터 적재 요청 → 적재 완료 후 2~4주 파일럿</li>
-    <li><b>기대 효과</b>: 앱푸시 반응 회복 시 DAU 하락분의 <b>~45%까지 커버(상한)</b></li>
-    </ul></div>""", unsafe_allow_html=True)
-with tc2:
-    st.markdown("""<div class="lever now"><div class="lt">트랙 B · 즉시 착수 (W0) · 리드타임 없음</div>
+    st.markdown("""<div class="lever now"><div class="lt">트랙 B · 금주 착수 · 리드타임 없음</div>
     <div class="lh">채널 도달 — 앱 미보유/삭제 VIP 재설치</div>
     <ul style="margin:6px 0 0;padding-left:18px">
-    <li><b>무엇</b>: 푸시 수신동의는 했지만 <b>앱을 지웠거나 미보유</b>인 VIP(약 168,000명)에게 문자·이메일·카카오로 재설치 오퍼 발송</li>
-    <li><b>왜</b>: 닿지 않으면 어떤 메시지도 무효 — 재설치되면 푸시 도달 모수로 편입되어 트랙 A의 대상도 늘어남</li>
-    <li><b>어떻게</b>: 발송군 vs 대조군 — 재설치율 → 재설치 후 7일 재방문 → 인센티브 비용 대비 복귀 가치로 판정</li>
-    <li><b>일정</b>: 이번 주 오퍼 확정·발송 → 2~4주 측정 (트랙 A 대기 기간의 공백을 메우는 즉시 액션)</li>
-    <li><b>기대 효과</b>: 재설치 1% 가정 시 DAU 하락분의 <b>~10% 커버(상한)</b></li>
+    <li><b>추진 내용</b>: 푸시 수신동의 상태이나 앱 미보유/삭제인 VIP(약 168,000명) 대상 문자·이메일·카카오 재설치 캠페인</li>
+    <li><b>배경</b>: 미도달 상태에서는 발송 자체가 무효 — 재설치 시 푸시 도달 모수로 편입되어 트랙 A의 대상도 확대</li>
+    <li><b>검증 방법</b>: 발송군 vs 대조군 — 재설치율 → 재설치 후 7일 내 재방문 → 인센티브 비용 대비 복귀 가치</li>
+    <li><b>일정</b>: 금주 오퍼 확정·대상 추출 → 익주 1차 발송 → 2~4주 측정</li>
+    <li><b>기대 효과</b>: 재설치 전환 1% 가정 시 DAU 하락분의 약 <b>10% 커버(상한)</b></li>
+    </ul></div>""", unsafe_allow_html=True)
+with tc2:
+    st.markdown("""<div class="lever soon"><div class="lt">트랙 A · 핵심 레버 · 준비는 금주 착수</div>
+    <div class="lh">행동 시점 정밀도 — D-1 발송의 실시간 전환</div>
+    <ul style="margin:6px 0 0;padding-left:18px">
+    <li><b>추진 내용</b>: 고객의 당일 행동(조회·검색·장바구니)을 감지하여 수 시간 내 관련 메시지를 발송하는 실시간 트리거로 전환</li>
+    <li><b>배경</b>: 현행 D-1(전일) 행동 기준 발송은 고객 의사결정 시점과 불일치 — 앱푸시 경유 DAU가 −20%로 최대 하락 항목</li>
+    <li><b>검증 방법</b>: 동질군 무작위 분할 A/B(실시간 vs D-1) — 발송→익일 재방문율로 판정</li>
+    <li><b>일정</b>: 금주 실시간 데이터 적재 요청·세그먼트 설계 착수 → 적재 완료 후 2~4주 파일럿</li>
+    <li><b>기대 효과</b>: 앱푸시 반응 회복 시 DAU 하락분의 최대 약 <b>45% 커버(상한)</b></li>
     </ul></div>""", unsafe_allow_html=True)
 
-st.markdown("""<div class="lever keep" style="margin-top:10px"><div class="lt">상시 유지 (신규 액션 아님)</div>
-<b>기존 운영 레버</b> — 휴면 자동화·행동 트리거(D-1)·전관행사·발송량 관리는 이미 운영 중(중단 시 후퇴하므로 유지),
-수신거부율 가드레일 모니터링 병행. 이 레버들은 소진 상태라 추가 개선 여지는 위 트랙 A·B에 있음.</div>""",
+st.markdown("""<div class="lever keep" style="margin-top:10px"><div class="lt">상시 운영 (신규 과제 아님)</div>
+<b>기존 운영 레버 유지</b> — 휴면 자동화·행동 트리거(D-1)·전관행사·발송량 관리는 기 운영 중으로 유지(중단 시 실적 후퇴),
+수신거부율 가드레일 병행 모니터링. 해당 레버는 소진 단계로, 추가 개선 여지는 트랙 A·B에 있음.</div>""",
             unsafe_allow_html=True)
 
-st.markdown('<div style="font-weight:700;font-size:15px;margin:16px 0 4px">목표 — "반등"이 아니라 "역신장 폭 축소"</div>',
+st.markdown('<div style="font-weight:700;font-size:15px;margin:16px 0 4px">목표 — 역신장 폭의 단계적 축소</div>',
             unsafe_allow_html=True)
 rows = "".join(
     f'<tr><td><b style="color:{c}">{n}</b></td><td class="l">{d}</td>'
@@ -265,24 +353,26 @@ st.markdown(f"""
 <table class="scen">
 <tr><th>시나리오</th><th>가정</th><th>26년 하반기 전년비 목표</th></tr>
 {rows}
-<tr><td>현재</td><td class="l">착수 시점 (2026-06, B2B 제외)</td><td><b style="color:#C44E52">{CUR_YOY:+.1f}%</b></td></tr>
+<tr><td>현재</td><td class="l">착수 시점 ({BASE['month']}, B2B 제외)</td><td><b style="color:#C44E52">{BASE['yoy']:+.1f}%</b></td></tr>
 </table>
 """, unsafe_allow_html=True)
-st.caption("DAU는 시장·상품 요인이 커 CRM 단독 반등은 과약속 — 커버 상한(A ~45% + B ~10%) 기반의 단계 목표이며, 파일럿 실측 후 보정.")
+st.caption("DAU는 시장·상품 요인의 영향이 커 CRM 단독의 반등 목표는 과약속 소지 — 커버 상한(A 약 45% + B 약 10%) 기반의 "
+           "단계 목표이며, 파일럿 실측 후 보정 예정.")
 
 insight([
-    "<b>주 1회 갱신</b>: ① 사이드바에 최신 채널 DAU 파일 업로드(③ 실적 자동 갱신) ② '② 실행 현황' 과제 상태 업데이트 "
-    "③ 파일럿 결과 CSV 업로드(④·⑤ 자동 판정).",
-], cap="🗓 운영 리듬")
+    "주 1회 갱신 — ① 최신 채널 DAU 파일 업로드(현황·실적 자동 갱신) ② '② 실행 현황' 과제 상태 갱신 "
+    "③ 파일럿 결과 CSV 업로드(트랙 A·B 자동 판정).",
+], cap="운영 방식")
 
 # ════════════════════════════════════════════════════════════
 # ② 실행 현황
 # ════════════════════════════════════════════════════════════
-section("② 실행 현황", "상태 편집 후 CSV 다운로드 → 레포 data/actions.csv 교체 시 영구 반영", anchor="sec-exec")
+section("② 실행 현황 (주간 갱신)",
+        "상태 편집 후 CSV 다운로드 → 레포 data/actions.csv 교체 시 영구 반영 · 목표일 순 정렬", anchor="sec-exec")
 
 acts = load_actions()
 if acts is None:
-    st.info("data/actions.csv 가 없습니다. 레포에 실행 과제 CSV를 추가하세요.")
+    st.info("data/actions.csv 가 없습니다. 레포에 실행 과제 CSV를 추가하십시오.")
 else:
     STATUS = ["예정", "진행중", "완료", "보류", "운영중"]
     edited = st.data_editor(
@@ -299,40 +389,22 @@ else:
     doing = (edited["status"] == "진행중").sum()
     total = (edited["status"].isin(["예정", "진행중", "완료", "보류"])).sum()  # 운영중은 분모 제외
     pc1, pc2, pc3 = st.columns([1, 1, 2])
-    with pc1: metric_card("완료", f"{done} / {total}", "운영중 과제는 분모 제외")
+    with pc1: metric_card("완료", f"{done} / {total}", "상시 운영 과제는 분모 제외")
     with pc2: metric_card("진행중", f"{doing}건", "")
     with pc3:
         st.progress(done / total if total else 0.0)
-        st.download_button("수정본 CSV 다운로드 (→ 레포 data/actions.csv 교체)",
+        st.download_button("수정본 CSV 다운로드 (레포 data/actions.csv 교체용)",
                            edited.to_csv(index=False).encode("utf-8-sig"),
                            "actions.csv", "text/csv")
 
 # ════════════════════════════════════════════════════════════
-# ③ 실적 — DAU 트래킹 (시나리오 대비)
+# ③ 실적 — DAU (월간·주간)
 # ════════════════════════════════════════════════════════════
-section("③ 실적 — VIP DAU vs 목표 시나리오",
-        "월별 실적(완료월 기준)을 전년 동월과 시나리오 밴드에 겹쳐 추적", anchor="sec-kpi")
-
-dau_m = None      # 월별 VIP DAU 시리즈 (월초 인덱스)
-dau_src = ""
-if up_chdau is not None:
-    dc = load_dau_channel(up_chdau)
-    tot_d = dc[dc["channel"] == "TOTAL"].set_index("date")["value"].sort_index()
-    med_d = tot_d.rolling(91, center=True, min_periods=30).median()
-    bad = tot_d.index[(tot_d / med_d > 1.6).fillna(False)]
-    tot_d = tot_d.drop(bad)
-    cutoff = tot_d.index.max()
-    dau_m = tot_d.groupby(pd.Grouper(freq="MS")).mean()
-    dau_m = drop_incomplete_months(dau_m, cutoff)
-    dau_src = f"채널 파일 DAU(B2B 제외{'·급증일 ' + str(len(bad)) + '일 제외' if len(bad) else ''})"
-elif up_mau is not None:
-    dm = load_dau_monthly_simple(up_mau)
-    s = dm[dm["metric"] == "DAU"].set_index("date")["value"].sort_index()
-    dau_m = drop_incomplete_months(s, pd.Timestamp.today().normalize())
-    dau_src = "월별 파일 DAU(※25.9~10 중복집계 오염 가능)"
+section("③ DAU 실적 — 목표 시나리오 대비",
+        "월간: 완료월 기준 시나리오 대비 · 주간: 주 1회 보고용 최신 추이", anchor="sec-kpi")
 
 if dau_m is None or len(dau_m) < 13:
-    st.info("사이드바에서 채널별 일 DAU(권장) 또는 월별 MAU/DAU 파일을 업로드하면 실적 트래킹이 표시됩니다. "
+    st.info("채널별 일 DAU 파일(권장) 또는 월별 MAU/DAU 파일 업로드 시 실적이 표시됩니다. "
             "(전년 동월 비교를 위해 13개월 이상 필요)")
 else:
     cur_year = int(dau_m.index.max().year)
@@ -340,26 +412,6 @@ else:
     prev = dau_m[dau_m.index.year == cur_year - 1]
     prev_by_m = {d.month: v for d, v in prev.items()}
 
-    # 최근 완료월 KPI + 시나리오 위치
-    last_dt = act.index.max()
-    last_v = act.loc[last_dt]
-    base_v = prev_by_m.get(last_dt.month)
-    yoy = (last_v / base_v - 1) * 100 if base_v else None
-    k1, k2, k3 = st.columns(3)
-    with k1: metric_card(f"VIP DAU ({last_dt:%Y-%m})", fnum(last_v), dau_src)
-    with k2:
-        metric_card("전년 동월비", f"{yoy:+.1f}%" if yoy is not None else "—",
-                    f"전년 동월 {fnum(base_v)}" if base_v else "전년 데이터 없음",
-                    color="#C44E52" if (yoy or 0) < 0 else "#55A868")
-    with k3:
-        if yoy is not None:
-            met = [n for n, t, _, _ in SCENARIOS if yoy >= t]
-            pos = f"'{met[-1]}' 달성" if met else "전 시나리오 미달"
-            col = "#55A868" if met else "#C44E52"
-            metric_card("시나리오 위치", pos,
-                        " · ".join(f"{n} {t:+.0f}%" for n, t, _, _ in SCENARIOS), color=col)
-
-    # 월별 실적 vs 전년·시나리오 밴드
     months_x = list(range(1, 13))
     fig = go.Figure()
     fig.add_bar(x=[d.month for d in act.index], y=act.values, name=f"{cur_year} 실적",
@@ -376,52 +428,42 @@ else:
                       yaxis=dict(title="VIP DAU(명)"))
     fig.update_xaxes(tickmode="array", tickvals=months_x,
                      ticktext=[f"{m}월" for m in months_x], title=None)
-    plot(fig, f"{cur_year}년 월별 VIP DAU — 전년 실선·목표 점선(전년 동월 × 시나리오)")
+    plot(fig, f"{cur_year}년 월별 VIP DAU — 전년 실선 · 목표 점선(전년 동월 × 시나리오)")
     st.caption("집계 중 부분월 자동 제외 · 목표선 = 전년 동월 × (1 + 시나리오 전년비)")
 
-    # ── 주간 뷰: 주 1회 보고용 (월이 안 끝나도 매주 최신 실적 확인)
-    if up_chdau is not None:
-        wk = tot_d.groupby(pd.Grouper(freq="W-SUN")).mean()
-        wk = wk[wk.index <= cutoff]          # 진행 중인 주(일요일 미도래) 제외
-        prev_wk = wk.shift(52)               # 전년 동주(52주 전)
-        if len(wk) > 1:
-            last_wk = wk.index.max()
-            w_now = wk.iloc[-1]
-            w_base = prev_wk.iloc[-1] if pd.notna(prev_wk.iloc[-1]) else None
-            wyoy = (w_now / w_base - 1) * 100 if w_base else None
-            w4 = ((wk.tail(4).mean() / prev_wk.tail(4).mean() - 1) * 100
-                  if prev_wk.tail(4).notna().all() else None)
-            wc1, wc2, wc3 = st.columns(3)
-            with wc1: metric_card(f"최근 완료주 주평균 DAU (~{last_wk:%m/%d})", fnum(w_now), "월~일 평균")
-            with wc2:
-                metric_card("전년 동주비", f"{wyoy:+.1f}%" if wyoy is not None else "—",
-                            f"전년 동주 {fnum(w_base)}" if w_base else "전년 데이터 없음",
-                            color="#C44E52" if (wyoy or 0) < 0 else "#55A868")
-            with wc3:
-                metric_card("최근 4주 평균 전년비", f"{w4:+.1f}%" if w4 is not None else "—",
-                            "주간 노이즈 평활 — 추세 판단용",
-                            color="#C44E52" if (w4 or 0) < 0 else "#55A868")
-            rec, base = wk.tail(12), prev_wk.tail(12)
-            figw = go.Figure()
-            figw.add_bar(x=rec.index, y=rec.values, name="주평균 DAU", marker_color="#4C72B0")
-            figw.add_scatter(x=base.index, y=base.values, name="전년 동주", mode="lines+markers",
-                             line=dict(color="#9aa7b8", width=2))
-            figw.update_layout(height=280, margin=dict(t=10, b=10), hovermode="x unified",
-                               legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
-                               yaxis=dict(title="주평균 DAU(명)"))
-            plot(figw, "주간 실적 — 최근 12주 vs 전년 동주")
-            st.caption("주=월~일, 완료된 주만 표시 · 전년 동주=52주 전 · 급증일 제외 반영")
+    # 주간 뷰: 월 마감 전에도 매주 최신 실적 확인
+    if wk is not None and len(wk) > 1:
+        last_wk = wk.index.max()
+        w_now = wk.iloc[-1]
+        w_base = prev_wk.iloc[-1] if pd.notna(prev_wk.iloc[-1]) else None
+        wyoy = (w_now / w_base - 1) * 100 if w_base else None
+        wc1, wc2 = st.columns(2)
+        with wc1: metric_card(f"최근 완료주 주평균 DAU (~{last_wk:%m/%d})", fnum(w_now), "월~일 평균")
+        with wc2:
+            metric_card("전년 동주비", f"{wyoy:+.1f}%" if wyoy is not None else "—",
+                        f"전년 동주 {fnum(w_base)}" if w_base else "전년 데이터 없음",
+                        color="#C44E52" if (wyoy or 0) < 0 else "#55A868")
+        rec, base = wk.tail(12), prev_wk.tail(12)
+        figw = go.Figure()
+        figw.add_bar(x=rec.index, y=rec.values, name="주평균 DAU", marker_color="#4C72B0")
+        figw.add_scatter(x=base.index, y=base.values, name="전년 동주", mode="lines+markers",
+                         line=dict(color="#9aa7b8", width=2))
+        figw.update_layout(height=280, margin=dict(t=10, b=10), hovermode="x unified",
+                           legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+                           yaxis=dict(title="주평균 DAU(명)"))
+        plot(figw, "주간 실적 — 최근 12주 vs 전년 동주")
+        st.caption("주 단위=월~일(완료된 주만 표시) · 전년 동주=52주 전 · 급증일 제외 반영")
 
 # ════════════════════════════════════════════════════════════
 # ④ 실적 — 트랙 B (재설치 캠페인)
 # ════════════════════════════════════════════════════════════
-section("④ 실적 — 트랙 B (미보유 재설치 캠페인)",
+section("④ 트랙 B 실적 — 미보유 재설치 캠페인",
         "발송군 vs 대조군: 재설치율 → 재설치 후 재방문 → 비용 효율", anchor="sec-trackb")
 
 TB_COLS = ["date", "group", "targets", "reinstalls", "revisits_7d", "optouts", "cost"]
 if up_tb is None:
-    st.info("트랙 B 결과 CSV를 업로드하면 자동 집계됩니다. 컬럼: " + ", ".join(TB_COLS) +
-            " (group=발송/대조, cost=인센티브 비용 원)")
+    st.info("트랙 B 결과 CSV 업로드 시 자동 집계됩니다. 컬럼: " + ", ".join(TB_COLS) +
+            " (group=발송/대조, cost=인센티브 비용·원)")
 else:
     tb = pd.read_csv(up_tb)
     missing = [c for c in TB_COLS[:5] if c not in tb.columns]
@@ -438,7 +480,7 @@ else:
             with b1: metric_card("재설치율 (발송군)", f"{rr:.2f}%",
                                  f"{fnum(send['reinstalls'])} / {fnum(send['targets'])}")
             with b2: metric_card("재설치 후 7일 재방문", f"{rv:.1f}%",
-                                 f"{fnum(send['revisits_7d'])}명 → DAU 편입 후보")
+                                 f"{fnum(send['revisits_7d'])}명 — DAU 편입 대상")
         if send is not None and ctrl is not None and ctrl["targets"]:
             res = ab_test(send["reinstalls"], send["targets"], ctrl["reinstalls"], ctrl["targets"])
             if res:
@@ -451,8 +493,8 @@ else:
         if "cost" in tb.columns and send is not None and send["reinstalls"]:
             cost = tb.loc[tb["group"] == "발송", "cost"].sum()
             if cost > 0:
-                st.caption(f"재설치 1인당 비용: {fnum(cost / send['reinstalls'])}원 · "
-                           f"7일 재방문 1인당 비용: {fnum(cost / max(send['revisits_7d'], 1))}원 — 복귀 LTV와 비교해 판정")
+                st.caption(f"재설치 1인당 비용 {fnum(cost / send['reinstalls'])}원 · "
+                           f"7일 재방문 1인당 비용 {fnum(cost / max(send['revisits_7d'], 1))}원 — 복귀 가치와 비교하여 판정")
         ts = tb.copy()
         ts["date"] = pd.to_datetime(ts["date"])
         w = (ts[ts["group"] == "발송"].groupby(pd.Grouper(key="date", freq="W"))
@@ -468,12 +510,12 @@ else:
 # ════════════════════════════════════════════════════════════
 # ⑤ 실적 — 트랙 A (실시간 트리거 A/B)
 # ════════════════════════════════════════════════════════════
-section("⑤ 실적 — 트랙 A (실시간 트리거 vs D-1)",
+section("⑤ 트랙 A 실적 — 실시간 트리거 vs D-1",
         "동질군 무작위 분할: 발송→익일 재방문율 리프트가 1차 판정 지표", anchor="sec-tracka")
 
 TA_COLS = ["date", "group", "sent", "clicks", "revisits_d1"]
 if up_ta is None:
-    st.info("트랙 A 결과 CSV를 업로드하면 자동 집계됩니다. 컬럼: " + ", ".join(TA_COLS) +
+    st.info("트랙 A 결과 CSV 업로드 시 자동 집계됩니다. 컬럼: " + ", ".join(TA_COLS) +
             " (group=실시간/D-1)")
 else:
     ta = pd.read_csv(up_ta)
@@ -500,28 +542,28 @@ else:
                 with a4: metric_card("통계 판정", "유의" if sig else "유의차 없음",
                                      f"p={pval:.3f} (양측)", color="#55A868" if sig else "#C44E52")
                 insight([
-                    ("<b>실시간 트리거가 유의하게 우세</b> — 스케일업 후보. 커버 상한(~45%) 내 확산 계획 수립."
+                    ("<b>실시간 트리거가 통계적으로 유의하게 우세</b> — 확대 적용 대상. 커버 상한(약 45%) 내 확산 계획 수립."
                      if sig and lift > 0 else
-                     "<b>유의차 미확인</b> — 표본 추가 확보 또는 세그먼트·콘텐츠 재설계 후 재검정."),
-                ], "ok" if sig and lift > 0 else "warn", cap="⚖️ 판정")
+                     "<b>유의차 미확인</b> — 표본 추가 확보 또는 세그먼트·콘텐츠 재설계 후 재검정 필요."),
+                ], "ok" if sig and lift > 0 else "warn", cap="판정")
         if "clicks" in ta.columns and rt is not None and d1 is not None:
             ctr_rt = rt["clicks"] / rt["sent"] * 100 if rt["sent"] else 0
             ctr_d1 = d1["clicks"] / d1["sent"] * 100 if d1["sent"] else 0
             st.caption(f"CTR — 실시간 {ctr_rt:.2f}% vs D-1 {ctr_d1:.2f}% (보조 지표)")
 
 # ════════════════════════════════════════════════════════════
-# ⑥ 판정 기준·템플릿
+# ⑥ 판정 기준·업로드 양식
 # ════════════════════════════════════════════════════════════
-section("⑥ 판정 기준 · 업로드 템플릿", anchor="sec-judge")
+section("⑥ 판정 기준 · 업로드 양식", anchor="sec-judge")
 
 st.markdown("""
 <table class="scen">
-<tr><th>트랙</th><th>성공</th><th>실패 시 다음 액션</th></tr>
+<tr><th>트랙</th><th>성공 기준</th><th>미달 시 조치</th></tr>
 <tr><td><b>A 실시간</b></td>
     <td class="l">실시간군 재방문율이 D-1군 대비 통계적으로 유의하게 높음(p&lt;0.05)</td>
-    <td class="l">시점 정밀도 가설 기각 → 콘텐츠·오퍼 레버로 선회</td></tr>
+    <td class="l">시점 정밀도 가설 기각 → 콘텐츠·오퍼 레버로 전환 검토</td></tr>
 <tr><td><b>B 재설치</b></td>
-    <td class="l">재설치→재방문 전환이 인센티브 비용 대비 복귀 LTV 손익분기 초과 + 대조군 대비 유의 리프트</td>
+    <td class="l">재설치→재방문 전환이 인센티브 비용 대비 복귀 가치 손익분기 초과 + 대조군 대비 유의 리프트</td>
     <td class="l">규모 축소·오퍼 재설계 (도달 확대 비효율 판정)</td></tr>
 </table>
 """, unsafe_allow_html=True)
@@ -529,20 +571,19 @@ st.markdown("""
 t1, t2 = st.columns(2)
 with t1:
     tb_tmpl = pd.DataFrame([
-        {"date": "2026-07-14", "group": "발송", "targets": 50000, "reinstalls": 450,
+        {"date": "2026-07-24", "group": "발송", "targets": 50000, "reinstalls": 450,
          "revisits_7d": 180, "optouts": 30, "cost": 1350000},
-        {"date": "2026-07-14", "group": "대조", "targets": 10000, "reinstalls": 25,
+        {"date": "2026-07-24", "group": "대조", "targets": 10000, "reinstalls": 25,
          "revisits_7d": 8, "optouts": 0, "cost": 0},
     ])
-    st.download_button("트랙 B 템플릿 CSV", tb_tmpl.to_csv(index=False).encode("utf-8-sig"),
+    st.download_button("트랙 B 결과 양식 CSV", tb_tmpl.to_csv(index=False).encode("utf-8-sig"),
                        "trackB_template.csv", "text/csv")
 with t2:
     ta_tmpl = pd.DataFrame([
-        {"date": "2026-08-01", "group": "실시간", "sent": 20000, "clicks": 900, "revisits_d1": 620},
-        {"date": "2026-08-01", "group": "D-1", "sent": 20000, "clicks": 700, "revisits_d1": 480},
+        {"date": "2026-08-10", "group": "실시간", "sent": 20000, "clicks": 900, "revisits_d1": 620},
+        {"date": "2026-08-10", "group": "D-1", "sent": 20000, "clicks": 700, "revisits_d1": 480},
     ])
-    st.download_button("트랙 A 템플릿 CSV", ta_tmpl.to_csv(index=False).encode("utf-8-sig"),
+    st.download_button("트랙 A 결과 양식 CSV", ta_tmpl.to_csv(index=False).encode("utf-8-sig"),
                        "trackA_template.csv", "text/csv")
 
-st.caption("데이터 파일은 레포에 커밋하지 않고 업로드로만 사용(공개 레포 민감정보 방지) · "
-           "실행 현황(actions.csv)만 레포에 저장")
+st.caption("데이터 파일은 레포에 커밋하지 않고 업로드로만 사용(공개 레포 정보보호) · 실행 현황(actions.csv)만 레포에 저장")
