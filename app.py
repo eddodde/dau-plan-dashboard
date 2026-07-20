@@ -471,8 +471,8 @@ else:
 
     months_x = list(range(1, 13))
     fig = go.Figure()
-    fig.add_bar(x=[d.month for d in act.index], y=act.values, name=f"{cur_year} 실적",
-                marker_color="#4C72B0")
+    fig.add_scatter(x=[d.month for d in act.index], y=act.values, name=f"{cur_year} 실적",
+                    mode="lines+markers", line=dict(color="#C44E52", width=3))
     if len(prev):
         fig.add_scatter(x=[d.month for d in prev.index], y=prev.values, name=f"{cur_year-1} 실적",
                         mode="lines+markers", line=dict(color="#9aa7b8", width=2))
@@ -485,7 +485,7 @@ else:
                       yaxis=dict(title="VIP DAU(명)"))
     fig.update_xaxes(tickmode="array", tickvals=months_x,
                      ticktext=[f"{m}월" for m in months_x], title=None)
-    plot(fig, f"{cur_year}년 월별 VIP DAU — 전년 실선 · 목표 점선(전년 동월 × 시나리오)")
+    plot(fig, f"{cur_year}년 월별 VIP DAU — 실적(빨강) vs 전년(회색) · 목표 점선(전년 동월 × 시나리오)")
     st.caption("집계 중 부분월 자동 제외 · 목표선 = 전년 동월 × (1 + 시나리오 전년비)")
 
     # 주간 뷰: 월 마감 전에도 매주 최신 실적 확인
